@@ -15,9 +15,10 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        val type = providers.gradleProperty("platformType")
-        val version = providers.gradleProperty("platformVersion")
-        create(type, version)
+        create(
+            providers.gradleProperty("platformType").get(),
+            providers.gradleProperty("platformVersion").get()
+        )
 
         bundledPlugins(
             providers.gradleProperty("platformBundledPlugins").map { it.split(',') }
@@ -52,6 +53,6 @@ intellijPlatform {
 
 tasks {
     wrapper {
-        gradleVersion = "8.12"
+        gradleVersion = "8.13"
     }
 }
