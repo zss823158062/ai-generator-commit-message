@@ -1,6 +1,6 @@
 # AI Commit Message Generator
 
-一个 IntelliJ IDEA 插件，利用 AI 自动分析代码变更并生成高质量、结构化的 Commit Message。
+一个轻量级的 IntelliJ IDEA 插件，利用 AI 自动分析代码变更并生成高质量、结构化的 Commit Message。无需复杂配置，开箱即用。
 
 **支持任意 VCS**：Git、SVN、Mercurial、Perforce 等所有 IntelliJ 支持的版本控制系统。
 
