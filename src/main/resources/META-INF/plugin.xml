@@ -6,48 +6,42 @@
 
     <description><![CDATA[
     <h1>AI Commit Message Generator</h1>
-    <p>Automatically generate commit messages using Ollama, OpenAI or OpenRouter based on your code changes.</p>
+    <p>Automatically generate commit messages using AI based on your code changes.</p>
+    <p><strong>Works with any VCS:</strong> Git, SVN, Mercurial, Perforce, and more!</p>
 
     <h2>Features</h2>
     <ul>
         <li>Add a button in the commit dialog to generate commit messages</li>
         <li>Analyze staged changes and generate meaningful commit messages</li>
-        <li>Customizable endpoints, models, and API Keys</li>
-        <li>Provider switch in Settings for different model vendors</li>
-        <li>Test Connection button to verify provider configuration</li>
+        <li>Customizable AI provider: Ollama, OpenAI, or OpenRouter</li>
+        <li>VCS-agnostic: works with Git, SVN, Mercurial, and any VCS supported by IntelliJ</li>
+        <li>Cross-platform: Windows, macOS, Linux</li>
     </ul>
 
     <h2>Usage</h2>
     <ol>
-        <li>Configure provider in Settings → Tools → AI Commit Message Generator</li>
+        <li>Configure AI provider in Settings → Tools → AI Commit Message Generator</li>
         <li>Open the commit dialog (Ctrl+K / Cmd+K)</li>
-        <li>Click the "Generate Commit Message" button</li>
+        <li>Click the "Commit助手" button</li>
         <li>Review and edit the generated message</li>
     </ol>
     ]]></description>
 
     <change-notes><![CDATA[
-    <h2>1.0.2</h2>
+    <h2>1.0.4</h2>
     <ul>
-        <li>Support latest IntelliJ IDEA 2025.x</li>
-        <li>Rebuild from source with clean project structure</li>
-    </ul>
-    <h2>1.0.1</h2>
-    <ul>
-        <li>Added OpenRouter provider support</li>
-        <li>Enhanced diff retrieval for new/deleted files</li>
-    </ul>
-    <h2>1.0.0</h2>
-    <ul>
-        <li>Initial release</li>
-        <li>Generate commit messages using Ollama AI</li>
-        <li>Configurable Ollama endpoint</li>
+        <li>VCS-agnostic: removed Git dependency, now works with any VCS</li>
+        <li>Use IntelliJ's native diff API instead of shelling out to git</li>
+        <li>Added context window presets for different model sizes</li>
+        <li>Added diff compression and truncation for large changesets</li>
+        <li>Improved error handling with token limit suggestions</li>
+        <li>Support URL # suffix for custom API endpoints</li>
+        <li>UI improvements: sections, API key visibility toggle, community link</li>
     </ul>
     ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.vcs</depends>
-    <depends>Git4Idea</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationConfigurable

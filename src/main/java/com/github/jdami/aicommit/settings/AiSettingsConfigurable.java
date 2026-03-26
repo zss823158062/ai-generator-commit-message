@@ -39,6 +39,7 @@ public class AiSettingsConfigurable implements Configurable {
                 || !settingsComponent.getOpenRouterModel().equals(settings.providers.openRouter.model)
                 || !settingsComponent.getOpenRouterApiKey().equals(settings.providers.openRouter.apiKey)
                 || settingsComponent.getTimeout() != settings.timeout
+                || settingsComponent.getMaxDiffChars() != settings.maxDiffChars
                 || !settingsComponent.getSystemPrompt().equals(settings.systemPrompt);
     }
 
@@ -98,6 +99,7 @@ public class AiSettingsConfigurable implements Configurable {
         settings.openAiApiKey = openAiApiKey;
 
         settings.timeout = settingsComponent.getTimeout();
+        settings.maxDiffChars = settingsComponent.getMaxDiffChars();
         settings.systemPrompt = systemPrompt;
 
         settings.loadState(settings);
@@ -121,6 +123,7 @@ public class AiSettingsConfigurable implements Configurable {
         settingsComponent.setOpenRouterApiKey(providers.openRouter != null && providers.openRouter.apiKey != null ? providers.openRouter.apiKey : "");
 
         settingsComponent.setTimeout(settings.timeout);
+        settingsComponent.setMaxDiffChars(settings.maxDiffChars);
         settingsComponent.setSystemPrompt(settings.systemPrompt != null ? settings.systemPrompt : new AiSettingsState().systemPrompt);
     }
 

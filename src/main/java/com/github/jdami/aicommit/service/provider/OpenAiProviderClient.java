@@ -3,6 +3,7 @@ package com.github.jdami.aicommit.service.provider;
 import com.github.jdami.aicommit.service.model.GenerationInputs;
 import com.github.jdami.aicommit.service.util.CommitMessageCleaner;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -33,7 +34,9 @@ public class OpenAiProviderClient extends BaseHttpProviderClient {
         requestBody.add("messages", messages);
         requestBody.addProperty("stream", false);
 
-        String url = normalizeBaseUrl(inputs.endpoint) + "/v1/chat/completions";
+        String url = inputs.endpoint.endsWith("#")
+                ? inputs.endpoint.substring(0, inputs.endpoint.length() - 1)
+                : normalizeBaseUrl(inputs.endpoint) + "/v1/chat/completions";
         String jsonBody = gson.toJson(requestBody);
 
         RequestBody body = RequestBody.create(jsonBody, JSON);
@@ -51,11 +54,36 @@ public class OpenAiProviderClient extends BaseHttpProviderClient {
             try (Response response = call.execute()) {
                 checkCanceled(indicator);
 
-                if (!response.isSuccessful()) {
-                    throw new IOException("Unexpected response code: " + response);
-                }
+                String responseBody = response.body() != null ? response.body().string() : "";
 
-                String responseBody = response.body().string();
+                if (!response.isSuccessful()) {
+                    String errorDetail = "\u672a\u77e5\u9519\u8bef";
+                    String suggestion = "";
+                    try {
+                        JsonObject errorJson = gson.fromJson(responseBody, JsonObject.class);
+                        if (errorJson.has("error")) {
+                            JsonElement errorElement = errorJson.get("error");
+                            if (errorElement.isJsonObject()) {
+                                JsonObject errorObj = errorElement.getAsJsonObject();
+                                String msg = errorObj.has("message") ? errorObj.get("message").getAsString() : "";
+                                String code = errorObj.has("code") && !errorObj.get("code").isJsonNull() ? errorObj.get("code").getAsString() : "";
+                                StringBuilder sb = new StringBuilder();
+                                if (!msg.isEmpty()) sb.append(msg);
+                                if (!code.isEmpty()) sb.append(" (Code: ").append(code).append(")");
+                                errorDetail = sb.length() > 0 ? sb.toString() : errorElement.toString();
+                            } else if (errorElement.isJsonPrimitive()) {
+                                errorDetail = errorElement.getAsString();
+                            }
+                            if (errorDetail.contains("exceed") || errorDetail.contains("token")
+                                    || errorDetail.contains("length") || errorDetail.contains("maximum")) {
+                                suggestion = "\n\n\ud83d\udca1 \u5efa\u8bae\uff1a\u8bf7\u5728\u8bbe\u7f6e\u4e2d\u9009\u62e9\u66f4\u5c0f\u7684\"\u4e0a\u4e0b\u6587\u7a97\u53e3\"\u9884\u8bbe\uff0c\u6216\u51cf\u5c11\u63d0\u4ea4\u7684\u6587\u4ef6\u6570\u91cf\u3002";
+                            }
+                        }
+                    } catch (Exception ignored) {
+                        errorDetail = responseBody.length() > 200 ? responseBody.substring(0, 200) + "..." : responseBody;
+                    }
+                    throw new IOException("API \u9519\u8bef (" + response.code() + "): " + errorDetail + suggestion);
+                }
                 JsonObject jsonResponse = gson.fromJson(responseBody, JsonObject.class);
 
                 if (!jsonResponse.has("choices") || !jsonResponse.get("choices").isJsonArray()

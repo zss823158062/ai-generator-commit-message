@@ -22,7 +22,9 @@ public class OllamaProviderClient extends BaseHttpProviderClient {
         requestBody.addProperty("stream", false);
 
         String jsonBody = gson.toJson(requestBody);
-        String url = normalizeBaseUrl(inputs.endpoint) + "/api/generate";
+        String url = inputs.endpoint.endsWith("#")
+                ? inputs.endpoint.substring(0, inputs.endpoint.length() - 1)
+                : normalizeBaseUrl(inputs.endpoint) + "/api/generate";
 
         RequestBody body = RequestBody.create(jsonBody, JSON);
         Request request = new Request.Builder().url(url).post(body).build();

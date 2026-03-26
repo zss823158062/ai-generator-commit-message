@@ -1,6 +1,7 @@
 package com.github.jdami.aicommit.actions;
 
 import com.github.jdami.aicommit.service.AiService;
+import com.github.jdami.aicommit.util.UnifiedDiffGenerator;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.application.ApplicationManager;
@@ -13,18 +14,22 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.IconLoader;
 import com.intellij.openapi.vcs.CheckinProjectPanel;
 import com.intellij.openapi.vcs.CommitMessageI;
+import com.intellij.openapi.vcs.FilePath;
+import com.intellij.openapi.vcs.FileStatus;
+import com.intellij.openapi.vcs.FileStatusManager;
 import com.intellij.openapi.vcs.changes.Change;
 import com.intellij.openapi.vcs.ui.Refreshable;
-import git4idea.GitUtil;
-import git4idea.repo.GitRepository;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.vcsUtil.VcsUtil;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.nio.charset.MalformedInputException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class GenerateCommitMessageAction extends AnAction {
 
@@ -61,7 +66,24 @@ public class GenerateCommitMessageAction extends AnAction {
         CommitMessageI commitMessageI = checkinPanel;
         Collection<Change> changes = checkinPanel.getSelectedChanges();
 
-        if (changes.isEmpty()) {
+        FileStatusManager fileStatusManager = FileStatusManager.getInstance(project);
+        @SuppressWarnings("unchecked")
+        Collection<VirtualFile> selectedVirtualFiles = checkinPanel.getVirtualFiles();
+
+        List<FilePath> unversionedFiles = selectedVirtualFiles.stream()
+                .filter(vf -> {
+                    FileStatus status = fileStatusManager.getStatus(vf);
+                    boolean isUnversioned = status == FileStatus.UNKNOWN;
+                    String vfPath = vf.getPath();
+                    boolean notInChanges = changes.stream().noneMatch(c ->
+                            (c.getAfterRevision() != null && c.getAfterRevision().getFile().getPath().equals(vfPath))
+                                    || (c.getBeforeRevision() != null && c.getBeforeRevision().getFile().getPath().equals(vfPath)));
+                    return isUnversioned && notInChanges;
+                })
+                .map(VcsUtil::getFilePath)
+                .collect(Collectors.toList());
+
+        if (changes.isEmpty() && unversionedFiles.isEmpty()) {
             Messages.showWarningDialog(project, "No changes selected for commit", "Warning");
             return;
         }
@@ -78,7 +100,7 @@ public class GenerateCommitMessageAction extends AnAction {
                     indicator.setFraction(0.3);
                     indicator.checkCanceled();
 
-                    String diffContent = getDiffContent(project, changes);
+                    String diffContent = getDiffContent(project, changes, unversionedFiles);
                     if (diffContent == null || diffContent.trim().isEmpty()) {
                         ApplicationManager.getApplication().invokeLater(() ->
                                 Messages.showWarningDialog(project, "No diff content found", "Warning"));
@@ -120,109 +142,78 @@ public class GenerateCommitMessageAction extends AnAction {
         });
     }
 
-    private String getDiffContent(Project project, Collection<Change> changes) {
+    private String getDiffContent(Project project, Collection<Change> changes, List<FilePath> unversionedFiles) {
+        StringBuilder diffBuilder = new StringBuilder();
+
+        for (Change change : changes) {
+            String diff = UnifiedDiffGenerator.generateDiff(change, project);
+            if (!diff.isEmpty()) {
+                diffBuilder.append(diff);
+            }
+        }
+
+        for (FilePath filePath : unversionedFiles) {
+            try {
+                String diff = generateDiffForUnversionedFile(filePath);
+                if (!diff.isEmpty()) {
+                    diffBuilder.append(diff);
+                }
+            } catch (Exception e) {
+                // Skip files that fail
+            }
+        }
+
+        String finalDiff = diffBuilder.toString();
+        return finalDiff.isEmpty() ? null : finalDiff;
+    }
+
+    private String generateDiffForUnversionedFile(FilePath filePath) throws Exception {
+        String absolutePath = filePath.getPath();
+        String relativePath = normalizePathForDiff(absolutePath);
+        File file = new File(absolutePath);
+
+        if (!file.exists() || !file.isFile()) {
+            return "";
+        }
+
+        if (filePath.getFileType().isBinary()) {
+            String fileType = filePath.getFileType().getName();
+            if ("UNKNOWN".equals(fileType)) {
+                int lastDotIndex = absolutePath.lastIndexOf('.');
+                if (lastDotIndex > 0 && lastDotIndex < absolutePath.length() - 1) {
+                    fileType = absolutePath.substring(lastDotIndex + 1).toUpperCase() + " File";
+                }
+            }
+            return String.format("File: %s (%s)\nOperation: New File\n", relativePath, fileType);
+        }
+
         try {
-            GitRepository repository = GitUtil.getRepositoryManager(project)
-                    .getRepositories().stream().findFirst().orElse(null);
-            if (repository == null) {
-                return null;
+            String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+            String[] lines = content.split("\\r?\\n", -1);
+            StringBuilder diff = new StringBuilder();
+            diff.append("diff --git a/").append(relativePath).append(" b/").append(relativePath).append("\n");
+            diff.append("new file mode 100644\n");
+            diff.append("--- /dev/null\n");
+            diff.append("+++ b/").append(relativePath).append("\n");
+            diff.append("@@ -0,0 +1,").append(lines.length).append(" @@\n");
+            for (String line : lines) {
+                diff.append("+").append(line).append("\n");
             }
-
-            String repoPath = repository.getRoot().getPath();
-            StringBuilder diffBuilder = new StringBuilder();
-
-            for (Change change : changes) {
-                String absolutePath = null;
-                boolean isNewFile = change.getBeforeRevision() == null;
-                boolean isDeletedFile = change.getAfterRevision() == null;
-
-                if (change.getAfterRevision() != null) {
-                    absolutePath = change.getAfterRevision().getFile().getPath();
-                } else if (change.getBeforeRevision() != null) {
-                    absolutePath = change.getBeforeRevision().getFile().getPath();
-                }
-
-                if (absolutePath == null) continue;
-
-                String relativePath = absolutePath;
-                if (absolutePath.startsWith(repoPath)) {
-                    relativePath = absolutePath.substring(repoPath.length());
-                    if (relativePath.startsWith("/") || relativePath.startsWith("\\")) {
-                        relativePath = relativePath.substring(1);
-                    }
-                }
-
-                try {
-                    String fileDiff = null;
-
-                    if (isNewFile) {
-                        fileDiff = executeGitDiff(repoPath, "diff", "--cached", "HEAD", "--", relativePath);
-                        if (fileDiff.isEmpty()) {
-                            fileDiff = executeGitDiff(repoPath, "diff", "--cached", "--", relativePath);
-                        }
-                        if (fileDiff.isEmpty()) {
-                            String showContent = executeGitDiff(repoPath, "show", ":" + relativePath);
-                            if (!showContent.isEmpty()) {
-                                String[] contentLines = showContent.split("\n");
-                                fileDiff = "diff --git a/" + relativePath + " b/" + relativePath +
-                                        "\nnew file mode 100644\n--- /dev/null\n+++ b/" + relativePath +
-                                        "\n@@ -0,0 +1," + contentLines.length + " @@\n";
-                                for (String line : contentLines) {
-                                    fileDiff += "+" + line + "\n";
-                                }
-                            }
-                        }
-                    } else if (isDeletedFile) {
-                        fileDiff = executeGitDiff(repoPath, "diff", "--cached", "--", relativePath);
-                        if (fileDiff.isEmpty()) {
-                            fileDiff = executeGitDiff(repoPath, "diff", "HEAD", "--", relativePath);
-                        }
-                    } else {
-                        fileDiff = executeGitDiff(repoPath, "diff", "--cached", "--", relativePath);
-                        if (fileDiff.isEmpty()) {
-                            fileDiff = executeGitDiff(repoPath, "diff", "--", relativePath);
-                        }
-                        if (fileDiff.isEmpty()) {
-                            fileDiff = executeGitDiff(repoPath, "diff", "HEAD", "--", relativePath);
-                        }
-                    }
-
-                    if (fileDiff != null && !fileDiff.isEmpty()) {
-                        diffBuilder.append(fileDiff);
-                    }
-                } catch (Exception e) {
-                    // Skip files that fail to diff
-                }
+            return diff.toString();
+        } catch (MalformedInputException e) {
+            String fileType = "Binary";
+            int lastDotIndex = absolutePath.lastIndexOf('.');
+            if (lastDotIndex > 0 && lastDotIndex < absolutePath.length() - 1) {
+                fileType = absolutePath.substring(lastDotIndex + 1).toUpperCase() + " File";
             }
-
-            String finalDiff = diffBuilder.toString();
-            return finalDiff.isEmpty() ? null : finalDiff;
+            return String.format("File: %s (%s)\nOperation: New File\n", relativePath, fileType);
         } catch (Exception e) {
-            return "Unable to get diff content: " + e.getMessage();
+            return String.format("File: %s (Unknown Type)\nOperation: New File\nNote: Error reading content\n", relativePath);
         }
     }
 
-    private String executeGitDiff(String repoPath, String... args) throws Exception {
-        ArrayList<String> command = new ArrayList<>();
-        command.add("git");
-        command.addAll(Arrays.asList(args));
-
-        ProcessBuilder processBuilder = new ProcessBuilder(command);
-        processBuilder.directory(new File(repoPath));
-        processBuilder.redirectErrorStream(true);
-
-        Process process = processBuilder.start();
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        StringBuilder output = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            output.append(line).append("\n");
-        }
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            return "";
-        }
-        return output.toString();
+    private String normalizePathForDiff(String path) {
+        return path.replace('\\', '/');
     }
 
     @Override
@@ -232,10 +223,10 @@ public class GenerateCommitMessageAction extends AnAction {
         e.getPresentation().setIcon(IconLoader.getIcon(
                 isGenerating ? "/icons/aiCommitStop.svg" : "/icons/aiCommit.svg",
                 GenerateCommitMessageAction.class));
-        e.getPresentation().setText(isGenerating ? "停止生成" : "Git助手");
+        e.getPresentation().setText(isGenerating ? "\u505c\u6b62\u751f\u6210" : "Commit\u52a9\u624b");
         e.getPresentation().setDescription(isGenerating
-                ? "停止生成 commit message"
-                : "Generate commit message using AI");
+                ? "\u505c\u6b62\u751f\u6210 commit message"
+                : "\u4f7f\u7528AI\u751f\u6210 commit message");
     }
 
     private void markGenerating(ProgressIndicator indicator) {

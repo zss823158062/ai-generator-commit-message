@@ -8,6 +8,9 @@ public final class PromptBuilder {
     }
 
     public static String buildPrompt(@NotNull String diffContent) {
+        String processed = DiffCompressor.compress(diffContent);
+        processed = DiffTruncator.truncate(processed);
+
         return "请分析以下 Git Diff 并生成专业的 commit message。\n" +
                 "\n" +
                 "## 分析步骤\n" +
@@ -38,7 +41,7 @@ public final class PromptBuilder {
                 "## Git Diff 内容\n" +
                 "\n" +
                 "```diff\n" +
-                diffContent + "\n" +
+                processed + "\n" +
                 "```\n" +
                 "\n" +
                 "---\n" +

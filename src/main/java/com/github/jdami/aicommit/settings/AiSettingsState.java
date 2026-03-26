@@ -25,6 +25,7 @@ public class AiSettingsState implements PersistentStateComponent<AiSettingsState
     @Deprecated public String openAiModel = "gpt-4o-mini";
 
     public int timeout = 30;
+    public int maxDiffChars = 20000;
 
     public String systemPrompt = "你是一个专业的 Git Commit Message 生成器。你的任务是分析代码变更并生成高质量、结构化的提交信息。\n" +
             "\n" +
@@ -233,5 +234,35 @@ public class AiSettingsState implements PersistentStateComponent<AiSettingsState
         OLLAMA,
         OPENAI,
         OPENROUTER
+    }
+
+    public enum ContextWindowPreset {
+        TINY_4K("\u6781\u5c0f\u6a21\u578b (4K tokens)", 10000),
+        SMALL_8K("\u5c0f\u6a21\u578b (8K tokens)", 20000),
+        MEDIUM_16K("\u4e2d\u7b49\u6a21\u578b (16K tokens)", 40000),
+        LARGE_32K("\u5927\u6a21\u578b (32K tokens)", 80000),
+        XLARGE_128K("\u8d85\u5927\u6a21\u578b (128K+ tokens)", 200000),
+        UNLIMITED("\u4e0d\u9650\u5236 (\u8c28\u614e\u4f7f\u7528)", 0);
+
+        private final String displayName;
+        private final int maxChars;
+
+        ContextWindowPreset(String displayName, int maxChars) {
+            this.displayName = displayName;
+            this.maxChars = maxChars;
+        }
+
+        public String getDisplayName() { return displayName; }
+        public int getMaxChars() { return maxChars; }
+
+        @Override
+        public String toString() { return displayName; }
+
+        public static ContextWindowPreset fromMaxChars(int maxChars) {
+            for (ContextWindowPreset preset : values()) {
+                if (preset.maxChars == maxChars) return preset;
+            }
+            return SMALL_8K;
+        }
     }
 }
