@@ -17,9 +17,6 @@ import com.intellij.util.ui.JBUI;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.net.URI;
 
 public class AiSettingsComponent {
 
@@ -28,14 +25,14 @@ public class AiSettingsComponent {
     private final JPanel providerCards = new JPanel(new CardLayout());
 
     private final JBTextField ollamaEndpointField = new JBTextField();
-    private final JBTextField ollamaModelField = new JBTextField();
+    private final JComboBox<String> ollamaModelCombo = createEditableCombo();
 
     private final JBTextField openAiEndpointField = new JBTextField();
-    private final JBTextField openAiModelField = new JBTextField();
+    private final JComboBox<String> openAiModelCombo = createEditableCombo();
     private final JBPasswordField openAiApiKeyField = new JBPasswordField();
 
     private final JBTextField openRouterEndpointField = new JBTextField();
-    private final JBTextField openRouterModelField = new JBTextField();
+    private final JComboBox<String> openRouterModelCombo = createEditableCombo();
     private final JBPasswordField openRouterApiKeyField = new JBPasswordField();
 
     private final JSpinner timeoutSpinner = new JSpinner(new SpinnerNumberModel(30, 5, 300, 5));
@@ -48,6 +45,45 @@ public class AiSettingsComponent {
         Dimension naturalSize = label.getPreferredSize();
         label.setPreferredSize(new Dimension(JBUI.scale(120), naturalSize.height));
         return label;
+    }
+
+    private static JComboBox<String> createEditableCombo() {
+        JComboBox<String> combo = new JComboBox<>();
+        combo.setEditable(true);
+        return combo;
+    }
+
+    private static String getComboText(JComboBox<String> combo) {
+        Object item = combo.getEditor().getItem();
+        return item != null ? item.toString() : "";
+    }
+
+    private static void setComboText(JComboBox<String> combo, String value) {
+        combo.setSelectedItem(value != null ? value : "");
+    }
+
+    /**
+     * 用获取到的模型列表填充下拉项,保留当前输入的文本。
+     */
+    private static void populateCombo(JComboBox<String> combo, java.util.List<String> models) {
+        String current = getComboText(combo);
+        combo.removeAllItems();
+        for (String m : models) {
+            combo.addItem(m);
+        }
+        combo.setSelectedItem(current);
+    }
+
+    /**
+     * 构建 "模型下拉框 + 获取模型按钮" 的组合面板。
+     */
+    private JPanel buildModelPanel(JComboBox<String> modelCombo, AiSettingsState.Provider provider) {
+        JPanel panel = new JPanel(new BorderLayout(JBUI.scale(5), 0));
+        panel.add(modelCombo, BorderLayout.CENTER);
+        JButton fetchButton = new JButton("获取模型");
+        fetchButton.addActionListener(e -> fetchModels(provider));
+        panel.add(fetchButton, BorderLayout.EAST);
+        return panel;
     }
 
     public AiSettingsComponent() {
@@ -71,21 +107,6 @@ public class AiSettingsComponent {
         contextWindowCombo.setSelectedItem(AiSettingsState.ContextWindowPreset.SMALL_8K);
         contextWindowPanel.add(contextWindowCombo);
 
-        JPanel linkPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JLabel linkLabel = new JLabel("<html>\u63d2\u4ef6\u53d1\u5e03\u5730\u5740: <a href='https://linux.do/t/topic/1415731/65'>LINUX.DO</a></html>");
-        linkLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        linkLabel.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                try {
-                    Desktop.getDesktop().browse(new URI("https://linux.do/t/topic/1415731/65"));
-                } catch (Exception ex) {
-                    Messages.showErrorDialog("\u65e0\u6cd5\u6253\u5f00\u94fe\u63a5: " + ex.getMessage(), "\u9519\u8bef");
-                }
-            }
-        });
-        linkPanel.add(linkLabel);
-
         mainPanel = FormBuilder.createFormBuilder()
                 .addLabeledComponent(createLabel("AI Provider: "), providerCombo, 1, false)
                 .addVerticalGap(5)
@@ -99,7 +120,6 @@ public class AiSettingsComponent {
                 .addComponent(new TitledSeparator("Generation Parameters"))
                 .addLabeledComponent(createLabel("System Prompt: "), scrollPane, 1, false)
                 .addComponentFillVertically(new JPanel(), 0)
-                .addComponent(linkPanel)
                 .getPanel();
 
         mainPanel.setBorder(JBUI.Borders.empty(10));
@@ -123,7 +143,7 @@ public class AiSettingsComponent {
         return FormBuilder.createFormBuilder()
                 .addLabeledComponent(createLabel("Endpoint URL: "), ollamaEndpointField, 1, false)
                 .addComponentToRightColumn(hintLabel)
-                .addLabeledComponent(createLabel("Model Name: "), ollamaModelField, 1, false)
+                .addLabeledComponent(createLabel("Model Name: "), buildModelPanel(ollamaModelCombo, AiSettingsState.Provider.OLLAMA), 1, false)
                 .getPanel();
     }
 
@@ -134,7 +154,7 @@ public class AiSettingsComponent {
         return FormBuilder.createFormBuilder()
                 .addLabeledComponent(createLabel("Endpoint URL: "), openAiEndpointField, 1, false)
                 .addComponentToRightColumn(hintLabel)
-                .addLabeledComponent(createLabel("Model Name: "), openAiModelField, 1, false)
+                .addLabeledComponent(createLabel("Model Name: "), buildModelPanel(openAiModelCombo, AiSettingsState.Provider.OPENAI), 1, false)
                 .addLabeledComponent(createLabel("API Key: "), createApiKeyPanel(openAiApiKeyField), 1, false)
                 .getPanel();
     }
@@ -146,7 +166,7 @@ public class AiSettingsComponent {
         return FormBuilder.createFormBuilder()
                 .addLabeledComponent(createLabel("Endpoint URL: "), openRouterEndpointField, 1, false)
                 .addComponentToRightColumn(hintLabel)
-                .addLabeledComponent(createLabel("Model Name: "), openRouterModelField, 1, false)
+                .addLabeledComponent(createLabel("Model Name: "), buildModelPanel(openRouterModelCombo, AiSettingsState.Provider.OPENROUTER), 1, false)
                 .addLabeledComponent(createLabel("API Key: "), createApiKeyPanel(openRouterApiKeyField), 1, false)
                 .getPanel();
     }
@@ -169,8 +189,8 @@ public class AiSettingsComponent {
 
     public String getOllamaEndpoint() { return ollamaEndpointField.getText() != null ? ollamaEndpointField.getText() : ""; }
     public void setOllamaEndpoint(String v) { ollamaEndpointField.setText(v != null ? v : ""); }
-    public String getOllamaModel() { return ollamaModelField.getText() != null ? ollamaModelField.getText() : ""; }
-    public void setOllamaModel(String v) { ollamaModelField.setText(v != null ? v : ""); }
+    public String getOllamaModel() { return getComboText(ollamaModelCombo); }
+    public void setOllamaModel(String v) { setComboText(ollamaModelCombo, v); }
     public int getTimeout() { return (Integer) timeoutSpinner.getValue(); }
     public void setTimeout(int v) { timeoutSpinner.setValue(v); }
     public int getMaxDiffChars() {
@@ -180,16 +200,16 @@ public class AiSettingsComponent {
     public void setMaxDiffChars(int v) { contextWindowCombo.setSelectedItem(AiSettingsState.ContextWindowPreset.fromMaxChars(v)); }
     public String getOpenAiEndpoint() { return openAiEndpointField.getText() != null ? openAiEndpointField.getText() : ""; }
     public void setOpenAiEndpoint(String v) { openAiEndpointField.setText(v != null ? v : ""); }
-    public String getOpenAiModel() { return openAiModelField.getText() != null ? openAiModelField.getText() : ""; }
-    public void setOpenAiModel(String v) { openAiModelField.setText(v != null ? v : ""); }
+    public String getOpenAiModel() { return getComboText(openAiModelCombo); }
+    public void setOpenAiModel(String v) { setComboText(openAiModelCombo, v); }
     public String getOpenAiApiKey() { return openAiApiKeyField.getPassword() != null ? String.valueOf(openAiApiKeyField.getPassword()) : ""; }
     public void setOpenAiApiKey(String v) { openAiApiKeyField.setText(v != null ? v : ""); }
     public String getSystemPrompt() { return systemPromptArea.getText() != null ? systemPromptArea.getText() : ""; }
     public void setSystemPrompt(String v) { systemPromptArea.setText(v != null ? v : ""); }
     public String getOpenRouterEndpoint() { return openRouterEndpointField.getText() != null ? openRouterEndpointField.getText() : ""; }
     public void setOpenRouterEndpoint(String v) { openRouterEndpointField.setText(v != null ? v : ""); }
-    public String getOpenRouterModel() { return openRouterModelField.getText() != null ? openRouterModelField.getText() : ""; }
-    public void setOpenRouterModel(String v) { openRouterModelField.setText(v != null ? v : ""); }
+    public String getOpenRouterModel() { return getComboText(openRouterModelCombo); }
+    public void setOpenRouterModel(String v) { setComboText(openRouterModelCombo, v); }
     public String getOpenRouterApiKey() { return openRouterApiKeyField.getPassword() != null ? String.valueOf(openRouterApiKeyField.getPassword()) : ""; }
     public void setOpenRouterApiKey(String v) { openRouterApiKeyField.setText(v != null ? v : ""); }
 
@@ -197,6 +217,45 @@ public class AiSettingsComponent {
         CardLayout layout = (CardLayout) providerCards.getLayout();
         AiSettingsState.Provider provider = getProvider() != null ? getProvider() : AiSettingsState.Provider.OLLAMA;
         layout.show(providerCards, provider.name());
+    }
+
+    private void fetchModels(AiSettingsState.Provider provider) {
+        String endpoint, apiKey;
+        JComboBox<String> targetCombo;
+        switch (provider) {
+            case OLLAMA:
+                endpoint = getOllamaEndpoint().trim(); apiKey = ""; targetCombo = ollamaModelCombo; break;
+            case OPENAI:
+                endpoint = getOpenAiEndpoint().trim(); apiKey = getOpenAiApiKey().trim(); targetCombo = openAiModelCombo; break;
+            case OPENROUTER:
+                endpoint = getOpenRouterEndpoint().trim(); apiKey = getOpenRouterApiKey().trim(); targetCombo = openRouterModelCombo; break;
+            default:
+                throw new IllegalStateException("Unknown provider: " + provider);
+        }
+        if (endpoint.isEmpty()) {
+            Messages.showErrorDialog("Endpoint cannot be empty", "获取模型失败");
+            return;
+        }
+        final String finalEndpoint = endpoint;
+        final String finalApiKey = apiKey;
+        final int timeout = getTimeout();
+        ProgressManager.getInstance().runProcessWithProgressSynchronously(() -> {
+            try {
+                java.util.List<String> models =
+                        new OpenAiProviderClient().fetchModels(finalEndpoint, finalApiKey, timeout);
+                SwingUtilities.invokeLater(() -> {
+                    if (models.isEmpty()) {
+                        Messages.showWarningDialog("未获取到任何模型", "获取模型");
+                    } else {
+                        populateCombo(targetCombo, models);
+                        targetCombo.showPopup();
+                    }
+                });
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() ->
+                        Messages.showErrorDialog("获取模型失败: " + ex.getMessage(), "获取模型失败"));
+            }
+        }, "获取模型列表...", true, null);
     }
 
     private void testConnection(AiSettingsState.Provider provider) {

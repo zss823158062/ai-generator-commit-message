@@ -15,8 +15,7 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        create(
-            providers.gradleProperty("platformType").get(),
+        intellijIdea(
             providers.gradleProperty("platformVersion").get()
         )
 
@@ -24,7 +23,9 @@ dependencies {
             providers.gradleProperty("platformBundledPlugins").map { it.split(',') }
         )
 
-        instrumentationTools()
+        // 2026.2 将 VCS 实现类(IdeaTextPatchBuilder / UnifiedDiffWriter)拆分到独立模块,
+        // 需显式声明以纳入编译类路径。
+        bundledModule("intellij.platform.vcs.impl")
     }
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -49,6 +50,9 @@ intellijPlatform {
             untilBuild = providers.gradleProperty("pluginUntilBuild")
         }
     }
+
+    // 本插件无可搜索设置项,禁用 buildSearchableOptions(需启动 IDE 实例,易在无 GUI 环境失败)
+    buildSearchableOptions = false
 }
 
 tasks {
@@ -58,5 +62,8 @@ tasks {
 
     withType<JavaCompile> {
         options.encoding = "UTF-8"
+        // 2026.2 平台 class 文件为 Java 25 (bytecode major 69),需以 25 为编译目标。
+        // 显式覆盖 IntelliJ 插件依据 sinceBuild 推导出的低版本 --release。
+        options.release.set(25)
     }
 }

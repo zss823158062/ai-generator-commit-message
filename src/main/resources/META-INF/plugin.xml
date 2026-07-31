@@ -28,6 +28,12 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h2>1.0.5</h2>
+    <ul>
+        <li>Compatible with IntelliJ Platform 2026.2 (build 262)</li>
+        <li>Migrated to unified IntelliJ IDEA artifact and JDK 25 toolchain</li>
+        <li>Requires IDE 2026.2 or newer</li>
+    </ul>
     <h2>1.0.4</h2>
     <ul>
         <li>VCS-agnostic: removed Git dependency, now works with any VCS</li>
